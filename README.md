@@ -145,3 +145,4 @@ and include “[Atllas RN Takehome]” in the subject line. We’ll be more than
 to answer your questions to the best of our ability!
 
 Thank you, and good luck!
+# authproject-reactnative-nextjs-typescript
