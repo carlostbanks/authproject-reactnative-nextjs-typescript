@@ -4,6 +4,7 @@ import {compareSync} from 'bcrypt';
 import {attachSession} from '../middleware/auth';
 import {sequelize, Session, User} from '../services/db';
 import {randomBytes} from 'crypto';
+import { hashSync } from 'bcrypt';
 
 const AuthRouter: IRoute = {
   route: '/auth',
@@ -94,6 +95,7 @@ const AuthRouter: IRoute = {
         expires: new Date(Date.now() + (3600 * 24 * 7 * 1000)), // +7 days
         secure: false,
         httpOnly: true,
+        sameSite: 'none',
       });
 
       // We return the cookie to the consumer so that non-browser
@@ -111,13 +113,74 @@ const AuthRouter: IRoute = {
     });
 
     // Attempt to register
-    router.post('/register', (req, res) => {
-      // TODO
+    router.post('/register', async (req, res) => {
+      const { username, password } = req.body;
+
+      if (!username || !password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username and password are required.'
+        });
+      }
+
+      try {
+        const existingUser = await User.findOne({ where: { username: username.toLowerCase() } });
+        if (existingUser) {
+          return res.status(409).json({
+            success: false,
+            message: 'Username is already taken.',
+          });
+        }
+
+        const hashedPassword = hashSync(password, 12);
+        const newUser = await User.create({
+          username: username.toLowerCase(),
+          password: hashedPassword,
+          registered: new Date(),
+        });
+        return res.status(201).json({
+          success: true,
+          message: 'User registered successfully.'
+        });
+      } catch (error) {
+        console.log('Registration failed.', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Internal server error.'
+        });
+      }
     });
 
     // Log out
-    router.post('/logout', (req, res) => {
-      // TODO
+    router.post('/logout', async (req, res) => {
+      const token = req.cookies.SESSION_TOKEN;
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          message: 'No session to log out from.'
+        });
+      }
+      
+      try {
+        await Session.destroy({
+          where: {
+            token: token
+          },
+        });
+
+        res.clearCookie('SESSION_TOKEN');
+
+        return res.json({
+          success: true,
+          message: 'Logged out successfully.'
+        });
+      } catch (error) {
+        console.log('Logout failed.', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Internal server error during logout.'
+        });
+      }
     });
 
     return router;
